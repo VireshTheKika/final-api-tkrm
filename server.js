@@ -17,6 +17,7 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: [
+      "https://final-client-tkrm.vercel.app",
       "http://localhost:5000",
       "https://tkrm-client.vercel.app",
       "http://localhost:5173",
