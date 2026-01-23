@@ -8,7 +8,7 @@ const SCOPES = ["https://www.googleapis.com/auth/calendar"];
 const oAuth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI
+  process.env.GOOGLE_REDIRECT_URI,
 );
 
 oAuth2Client.setCredentials({
@@ -40,7 +40,7 @@ export const addEventToCalendar = async (task) => {
     },
     end: {
       dateTime: new Date(
-        new Date(task.deadline).getTime() + 60 * 60 * 1000 
+        new Date(task.deadline).getTime() + 60 * 60 * 1000,
       ).toISOString(),
       timeZone: "Asia/Kolkata",
     },

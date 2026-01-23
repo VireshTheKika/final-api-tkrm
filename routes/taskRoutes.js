@@ -21,7 +21,6 @@ router.get("/all", protect, async (req, res) => {
   res.json(users);
 });
 
-// Add a note to a task
 router.post("/:id/notes", protect, async (req, res) => {
   const task = await Task.findById(req.params.id);
   if (!task) return res.status(404).json({ message: "Task not found" });

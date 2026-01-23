@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
     googleId: { type: String },
     profilePic: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // 🔐 Password hashing (only if password field exists)

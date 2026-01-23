@@ -8,21 +8,21 @@ export const createTask = async (req, res) => {
   try {
     const { title, description, priority, assignedTo, deadline } = req.body;
 
-    // 🔒 Restrict Employees
+    //  Restrict Employees
     if (req.user.role === "Employee") {
       return res
         .status(403)
         .json({ message: "Access denied — Employees cannot create tasks" });
     }
 
-    // 🧾 Validate inputs
+    //  Validate inputs
     if (!title || !assignedTo) {
       return res
         .status(400)
         .json({ message: "Title and assignedTo are required" });
     }
 
-    // 🕒 Validate deadline (optional)
+    //  Validate deadline (optional)
     if (deadline) {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // start of today
@@ -37,7 +37,7 @@ export const createTask = async (req, res) => {
       }
     }
 
-    // 👥 Check assigned user validity
+    //  Check assigned user validity
     const assignedUser = await User.findById(assignedTo);
     if (!assignedUser) {
       return res.status(404).json({ message: "Assigned user not found" });
@@ -49,7 +49,7 @@ export const createTask = async (req, res) => {
         .json({ message: "Tasks can only be assigned to employees" });
     }
 
-    // 🆕 Create task
+    //  Create task
     const task = await Task.create({
       title,
       description,
@@ -60,7 +60,7 @@ export const createTask = async (req, res) => {
     });
 
     // try {
-    //   const emailSubject = `🗓️ New Task Assigned: ${title}`;
+    //   const emailSubject = ` New Task Assigned: ${title}`;
     //   const emailBody = `
     //     <h2>Hello ${assignedUser.name},</h2>
     //     <p>You have been assigned a new task by <b>${req.user.name}</b>.</p>
@@ -80,9 +80,9 @@ export const createTask = async (req, res) => {
     //   `;
 
     //   await sendEmail(assignedUser.email, emailSubject, emailBody);
-    //   console.log(`Task assignment email sent to ${assignedUser.email}`);
+    //   console.log(`📧 Task assignment email sent to ${assignedUser.email}`);
     // } catch (emailError) {
-    //   console.error("Failed to send email:", emailError.message);
+    //   console.error("⚠️ Failed to send email:", emailError.message);
     // }
 
     res.status(201).json({
@@ -91,7 +91,7 @@ export const createTask = async (req, res) => {
       task,
     });
   } catch (error) {
-    console.error("Error creating task:", error);
+    console.error("❌ Error creating task:", error);
     res.status(500).json({ message: "Server error while creating task" });
   }
 };
@@ -164,6 +164,128 @@ export const deleteTask = async (req, res) => {
     res.json({ success: true, message: "Task deleted successfully" });
   } catch (error) {
     console.error("Error deleting task:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const startTask = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (task.startTime)
+      return res.status(400).json({ message: "Task already started" });
+
+    const now = new Date();
+
+    task.startTime = now;
+    task.lastResumedAt = now;
+    task.status = "Ongoing";
+    task.isPaused = false;
+    task.pausedAt = null;
+    task.pausedDuration = 0;
+    task.totalWorkedSeconds = 0;
+
+    await task.save();
+    await task.populate("assignedBy", "name email");
+
+    res.status(200).json(task);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const togglePause = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (!task.startTime)
+      return res.status(400).json({ message: "Task not started" });
+    if (task.status === "Completed")
+      return res.status(400).json({ message: "Already completed" });
+
+    const now = new Date();
+
+    if (!task.isPaused) {
+      // ▶ PAUSE
+      const workedSeconds = Math.floor(
+        (now - new Date(task.lastResumedAt)) / 1000,
+      );
+      task.totalWorkedSeconds += workedSeconds;
+
+      task.isPaused = true;
+      task.status = "Paused";
+      task.pausedAt = now;
+    } else {
+      // ▶ RESUME
+      task.isPaused = false;
+      task.status = "Ongoing";
+      task.pausedAt = null;
+      task.lastResumedAt = now;
+    }
+
+    await task.save();
+    await task.populate("assignedBy", "name email");
+
+    res.status(200).json(task);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const completeTask = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (task.status === "Completed")
+      return res.status(400).json({ message: "Already completed" });
+
+    const now = new Date();
+
+    if (!task.isPaused) {
+      const workedSeconds = Math.floor(
+        (now - new Date(task.lastResumedAt)) / 1000,
+      );
+      task.totalWorkedSeconds += workedSeconds;
+    }
+
+    task.status = "Completed";
+    task.endTime = now;
+    task.isPaused = false;
+    task.lastResumedAt = null;
+    task.pausedAt = null;
+
+    await task.save();
+    await task.populate("assignedBy", "name email");
+
+    res.status(200).json(task);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const reopenTask = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (task.status !== "Completed")
+      return res
+        .status(400)
+        .json({ message: "Only completed tasks can be reopened" });
+
+    const now = new Date();
+
+    task.status = "Ongoing";
+    task.isPaused = false;
+    task.endTime = null;
+    task.lastResumedAt = now;
+    task.pausedAt = null;
+
+    await task.save();
+    await task.populate("assignedBy", "name email");
+
+    res.status(200).json(task);
+  } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
