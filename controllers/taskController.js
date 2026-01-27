@@ -1,31 +1,31 @@
 import Task from "../models/taskModel.js";
 import User from "../models/userModel.js";
+import Client from "../models/Client.js";
 import { addEventToCalendar } from "../utils/googleCalendar.js";
 import sendEmail from "../utils/sendEmail.js";
 
-//  CREATE TASK (Admin/Manager only)
 export const createTask = async (req, res) => {
   try {
-    const { title, description, priority, assignedTo, deadline } = req.body;
+    const { title, description, client, priority, assignedTo, deadline } =
+      req.body;
 
-    //  Restrict Employees
+    // Restrict Employees
     if (req.user.role === "Employee") {
       return res
         .status(403)
         .json({ message: "Access denied — Employees cannot create tasks" });
     }
 
-    //  Validate inputs
-    if (!title || !assignedTo) {
-      return res
-        .status(400)
-        .json({ message: "Title and assignedTo are required" });
+    // Validate inputs
+    if (!title || !assignedTo || !client) {
+      return res.status(400).json({
+        message: "Title, client and assignedTo are required",
+      });
     }
 
-    //  Validate deadline (optional)
     if (deadline) {
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // start of today
+      today.setHours(0, 0, 0, 0);
 
       const selectedDeadline = new Date(deadline);
       selectedDeadline.setHours(0, 0, 0, 0);
@@ -37,7 +37,13 @@ export const createTask = async (req, res) => {
       }
     }
 
-    //  Check assigned user validity
+    // Validate client
+    const clientExists = await Client.findById(client);
+    if (!clientExists) {
+      return res.status(400).json({ message: "Invalid client selected" });
+    }
+
+    // Check assigned user validity
     const assignedUser = await User.findById(assignedTo);
     if (!assignedUser) {
       return res.status(404).json({ message: "Assigned user not found" });
@@ -49,41 +55,16 @@ export const createTask = async (req, res) => {
         .json({ message: "Tasks can only be assigned to employees" });
     }
 
-    //  Create task
+    // Create task
     const task = await Task.create({
       title,
       description,
+      client, // ObjectId reference
       priority: priority || "Low",
       assignedTo,
       assignedBy: req.user._id,
       deadline: deadline ? new Date(deadline) : null,
     });
-
-    try {
-      const emailSubject = ` New Task Assigned: ${title}`;
-      const emailBody = `
-        <h2>Hello ${assignedUser.name},</h2>
-        <p>You have been assigned a new task by <b>${req.user.name}</b>.</p>
-        <p><b>Task Title:</b> ${title}</p>
-        <p><b>Description:</b> ${description || "No description provided."}</p>
-        <p><b>Priority:</b> ${priority || "Low"}</p>
-        ${
-          deadline
-            ? `<p><b>Deadline:</b> ${new Date(
-                deadline
-              ).toLocaleDateString()}</p>`
-            : ""
-        }
-        <p>Please log in to your dashboard to view and update the task status.</p>
-        <br/>
-        <p>Regards,<br/>Task Manager System</p>
-      `;
-
-      await sendEmail(assignedUser.email, emailSubject, emailBody);
-      console.log(` Task assignment email sent to ${assignedUser.email}`);
-    } catch (emailError) {
-      console.error(" Failed to send email:", emailError.message);
-    }
 
     res.status(201).json({
       success: true,
@@ -96,19 +77,26 @@ export const createTask = async (req, res) => {
   }
 };
 
-//  GET ALL TASKS (Admin/Manager see all, Employee sees own)
 export const getTasks = async (req, res) => {
   try {
     let tasks;
+
+    const populateOptions = [
+      { path: "client", select: "name" },
+      { path: "assignedBy", select: "name email" },
+      { path: "assignedTo", select: "name email" },
+    ];
+
     if (req.user.role === "Employee") {
       tasks = await Task.find({ assignedTo: req.user._id })
-        .populate("assignedBy", "name email")
+        .populate(populateOptions)
         .sort({ createdAt: -1 });
     } else {
       tasks = await Task.find()
-        .populate("assignedTo", "name email")
+        .populate(populateOptions)
         .sort({ createdAt: -1 });
     }
+
     res.json(tasks);
   } catch (error) {
     console.error("Error fetching tasks:", error);
@@ -207,7 +195,6 @@ export const togglePause = async (req, res) => {
     const now = new Date();
 
     if (!task.isPaused) {
-      // ▶ PAUSE
       const workedSeconds = Math.floor(
         (now - new Date(task.lastResumedAt)) / 1000,
       );
@@ -217,7 +204,6 @@ export const togglePause = async (req, res) => {
       task.status = "Paused";
       task.pausedAt = now;
     } else {
-      // ▶ RESUME
       task.isPaused = false;
       task.status = "Ongoing";
       task.pausedAt = null;
@@ -285,6 +271,86 @@ export const reopenTask = async (req, res) => {
     await task.populate("assignedBy", "name email");
 
     res.status(200).json(task);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const requestTaskCompletion = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    // Employee can only request their own task
+    if (
+      req.user.role === "Employee" &&
+      task.assignedTo.toString() !== req.user._id.toString()
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (task.status === "Completed") {
+      return res.status(400).json({ message: "Task already completed" });
+    }
+
+    const now = new Date();
+
+    // Final work time calc
+    if (!task.isPaused && task.lastResumedAt) {
+      const workedSeconds = Math.floor(
+        (now - new Date(task.lastResumedAt)) / 1000,
+      );
+      task.totalWorkedSeconds += workedSeconds;
+    }
+
+    task.status = "WaitingApproval";
+    task.isPaused = true;
+    task.pausedAt = now;
+    task.lastResumedAt = null;
+
+    await task.save();
+
+    res.json({
+      success: true,
+      message: "Task sent for manager approval",
+      task,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+export const approveTaskCompletion = async (req, res) => {
+  try {
+    if (!["Admin", "Manager"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Approval access denied" });
+    }
+
+    const task = await Task.findById(req.params.id);
+
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    if (task.status !== "WaitingApproval") {
+      return res
+        .status(400)
+        .json({ message: "Task is not waiting for approval" });
+    }
+
+    task.status = "Completed";
+    task.endTime = new Date();
+    task.isPaused = false;
+    task.approvedBy = req.user._id;
+    task.approvedAt = new Date();
+
+    await task.save();
+    await task.populate("approvedBy", "name email");
+
+    res.json({
+      success: true,
+      message: "Task approved and completed",
+      task,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

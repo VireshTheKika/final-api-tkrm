@@ -24,7 +24,7 @@ app.use(
       "http://localhost:3000",
     ],
     credentials: true,
-  })
+  }),
 );
 
 //  Routes

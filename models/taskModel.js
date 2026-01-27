@@ -13,6 +13,12 @@ const taskSchema = new mongoose.Schema(
       trim: true,
     },
 
+    client: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: true,
+    },
+
     priority: {
       type: String,
       enum: ["Low", "Medium", "High"],
@@ -21,17 +27,24 @@ const taskSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Pending", "Ongoing", "Paused", "Completed"], // Added "Pending" and "Paused"
-      default: "Pending", // Changed default to "Pending"
+      enum: ["Pending", "Ongoing", "Paused", "WaitingApproval", "Completed"],
+      default: "Pending",
     },
 
-    //  Deadline for task completion
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    approvedAt: {
+      type: Date,
+    },
+
     deadline: {
       type: Date,
-      required: false, // optional field
+      required: false,
     },
 
-    // 💬 Notes added by employees or managers
     notes: [
       {
         message: { type: String, trim: true },

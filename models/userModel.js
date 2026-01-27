@@ -11,13 +11,19 @@ const userSchema = new mongoose.Schema(
       enum: ["Admin", "Manager", "Employee"],
       default: "Employee",
     },
+    designation: {
+      type: String,
+      default: "Graphic Designer", // or empty ""
+      trim: true,
+    },
+
     googleId: { type: String },
     profilePic: { type: String },
   },
   { timestamps: true },
 );
 
-// 🔐 Password hashing (only if password field exists)
+// Password hashing (only if password field exists)
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -25,7 +31,7 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// 🧾 Method to check password (for manual login later)
+//  Method to check password (for manual login later)
 userSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };

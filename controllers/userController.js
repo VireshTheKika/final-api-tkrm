@@ -65,6 +65,58 @@ export const updateUser = async (req, res) => {
   }
 };
 
+// user role update
+export const updateUserRole = async (req, res) => {
+  try {
+    const { role } = req.body;
+
+    if (!["Admin", "Manager", "Employee"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role" });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.role = role;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Role updated successfully",
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// update user role
+export const updateUserDesignation = async (req, res) => {
+  try {
+    const { designation } = req.body;
+
+    if (!designation) {
+      return res.status(400).json({ message: "Designation is required" });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.designation = designation;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Designation updated successfully",
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // DELETE user
 export const deleteUser = async (req, res) => {
   try {
@@ -97,7 +149,7 @@ export const logoutUser = async (req, res) => {
   }
 };
 
-// 🔹 GOOGLE SIGN-IN CONTROLLER (FIXED)
+// GOOGLE SIGN-IN CONTROLLER (FIXED)
 export const googleLogin = async (req, res) => {
   try {
     const { token } = req.body;

@@ -5,6 +5,12 @@ import {
   getTasks,
   updateTask,
   deleteTask,
+  startTask,
+  togglePause,
+  completeTask,
+  reopenTask,
+  approveTaskCompletion,
+  requestTaskCompletion,
 } from "../controllers/taskController.js";
 import Task from "../models/taskModel.js";
 
@@ -21,6 +27,7 @@ router.get("/all", protect, async (req, res) => {
   res.json(users);
 });
 
+// Add a note to a task
 router.post("/:id/notes", protect, async (req, res) => {
   const task = await Task.findById(req.params.id);
   if (!task) return res.status(404).json({ message: "Task not found" });
@@ -44,4 +51,11 @@ router.get("/", protect, async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+router.patch("/:id/start", startTask);
+router.patch("/:id/pause", togglePause);
+router.patch("/:id/complete", completeTask);
+router.patch("/:id/reopen", reopenTask);
+router.patch("/:id/request-complete", protect, requestTaskCompletion);
+router.patch("/:id/approve", protect, approveTaskCompletion);
+
 export default router;
