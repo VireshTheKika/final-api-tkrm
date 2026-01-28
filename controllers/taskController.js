@@ -86,7 +86,10 @@ export const createTask = async (req, res) => {
         <p>Regards,<br/>Task Manager System</p>
       `;
 
-      await sendEmail(assignedUser.email, emailSubject, emailBody);
+      sendEmail(assignedUser.email, emailSubject, emailBody).catch(
+        console.error,
+      );
+
       console.log(`📧 Task assignment email sent to ${assignedUser.email}`);
     } catch (emailError) {
       console.error("⚠️ Failed to send email:", emailError.message);
