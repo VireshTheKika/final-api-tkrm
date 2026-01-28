@@ -66,6 +66,32 @@ export const createTask = async (req, res) => {
       deadline: deadline ? new Date(deadline) : null,
     });
 
+    try {
+      const emailSubject = ` New Task Assigned: ${title}`;
+      const emailBody = `
+        <h2>Hello ${assignedUser.name},</h2>
+        <p>You have been assigned a new task by <b>${req.user.name}</b>.</p>
+        <p><b>Task Title:</b> ${title}</p>
+        <p><b>Description:</b> ${description || "No description provided."}</p>
+        <p><b>Priority:</b> ${priority || "Low"}</p>
+        ${
+          deadline
+            ? `<p><b>Deadline:</b> ${new Date(
+                deadline,
+              ).toLocaleDateString()}</p>`
+            : ""
+        }
+        <p>Please log in to your dashboard to view and update the task status.</p>
+        <br/>
+        <p>Regards,<br/>Task Manager System</p>
+      `;
+
+      await sendEmail(assignedUser.email, emailSubject, emailBody);
+      console.log(`📧 Task assignment email sent to ${assignedUser.email}`);
+    } catch (emailError) {
+      console.error("⚠️ Failed to send email:", emailError.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Task created successfully",
